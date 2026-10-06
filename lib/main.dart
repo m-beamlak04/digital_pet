@@ -1,4 +1,5 @@
 import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 void main() {
@@ -32,12 +33,14 @@ class _DigitalPetPageState extends State<DigitalPetPage> {
 
   bool hasWon = false;
   bool gameOver = false;
+  bool isPaused = false;
 
   Timer? _hungerTimer;
   Timer? _highMoodTimer;
 
-  final TextEditingController _nameController =
-  TextEditingController(text: 'Pip');
+  final TextEditingController _nameController = TextEditingController(
+    text: 'Pip',
+  );
 
   String get mood {
     if (happiness > 70) {
@@ -93,6 +96,7 @@ class _DigitalPetPageState extends State<DigitalPetPage> {
       hunger = 50;
       hasWon = false;
       gameOver = false;
+      isPaused = false;
     });
 
     startHungerTimer();
@@ -107,21 +111,18 @@ class _DigitalPetPageState extends State<DigitalPetPage> {
   void startHungerTimer() {
     _hungerTimer?.cancel();
 
-    _hungerTimer = Timer.periodic(
-      const Duration(seconds: 30),
-          (timer) {
-        setState(() {
-          if (hunger + 5 > 100) {
-            hunger = 100;
-            happiness = (happiness - 20).clamp(0, 100);
-          } else {
-            hunger += 5;
-          }
+    _hungerTimer = Timer.periodic(const Duration(seconds: 30), (timer) {
+      setState(() {
+        if (hunger + 5 > 100) {
+          hunger = 100;
+          happiness = (happiness - 20).clamp(0, 100);
+        } else {
+          hunger += 5;
+        }
 
-          _updateOutcome();
-        });
-      },
-    );
+        _updateOutcome();
+      });
+    });
   }
 
   @override
@@ -145,19 +146,16 @@ class _DigitalPetPageState extends State<DigitalPetPage> {
 
     if (happiness > 80) {
       if (_highMoodTimer == null) {
-        _highMoodTimer = Timer(
-          const Duration(minutes: 3),
-              () {
-            if (mounted && happiness > 80 && !gameOver) {
-              setState(() {
-                hasWon = true;
-                _hungerTimer?.cancel();
-              });
-            }
+        _highMoodTimer = Timer(const Duration(minutes: 3), () {
+          if (mounted && happiness > 80 && !gameOver) {
+            setState(() {
+              hasWon = true;
+              _hungerTimer?.cancel();
+            });
+          }
 
-            _highMoodTimer = null;
-          },
-        );
+          _highMoodTimer = null;
+        });
       }
     } else {
       _highMoodTimer?.cancel();
@@ -170,6 +168,27 @@ class _DigitalPetPageState extends State<DigitalPetPage> {
       setState(() {
         petName = _nameController.text.trim();
       });
+    }
+  }
+
+  void pauseGame() {
+    setState(() {
+      isPaused = true;
+    });
+
+    _hungerTimer?.cancel();
+    _highMoodTimer?.cancel();
+    _highMoodTimer = null;
+  }
+
+  void resumeGame() {
+    setState(() {
+      isPaused = false;
+      _updateOutcome();
+    });
+
+    if (!hasWon && !gameOver) {
+      startHungerTimer();
     }
   }
 
@@ -210,9 +229,15 @@ class _DigitalPetPageState extends State<DigitalPetPage> {
 
             const SizedBox(height: 20),
 
-            ColorFiltered(
-              colorFilter: ColorFilter.mode(moodColor, BlendMode.modulate),
-              child: Image.asset('assets/pet.png', height: 200),
+            AnimatedScale(
+              scale: happiness > 70 ? 1.1 : 1.0,
+              duration: MediaQuery.of(context).disableAnimations
+                  ? Duration.zero
+                  : const Duration(milliseconds: 300),
+              child: ColorFiltered(
+                colorFilter: ColorFilter.mode(moodColor, BlendMode.modulate),
+                child: Image.asset('assets/pet.png', height: 200),
+              ),
             ),
 
             const SizedBox(height: 20),
@@ -246,24 +271,57 @@ class _DigitalPetPageState extends State<DigitalPetPage> {
 
             Text('Happiness: $happiness / 100'),
             const SizedBox(height: 8),
-            LinearProgressIndicator(value: happiness / 100),
+            TweenAnimationBuilder<double>(
+              tween: Tween<double>(begin: 0, end: happiness / 100),
+              duration: MediaQuery.of(context).disableAnimations
+                  ? Duration.zero
+                  : const Duration(milliseconds: 300),
+              builder: (context, value, child) {
+                return LinearProgressIndicator(value: value);
+              },
+            ),
 
             const SizedBox(height: 20),
 
             Text('Hunger: $hunger / 100'),
             const SizedBox(height: 8),
-            LinearProgressIndicator(value: hunger / 100),
+            TweenAnimationBuilder<double>(
+              tween: Tween<double>(begin: 0, end: hunger / 100),
+              duration: MediaQuery.of(context).disableAnimations
+                  ? Duration.zero
+                  : const Duration(milliseconds: 300),
+              builder: (context, value, child) {
+                return LinearProgressIndicator(value: value);
+              },
+            ),
+
             const SizedBox(height: 30),
 
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: [
-                ElevatedButton(onPressed: hasWon || gameOver ? null : feedPet, child: const Text('Feed')),
                 ElevatedButton(
-                  onPressed: hasWon || gameOver ? null : playWithPet,
+                  onPressed: hasWon || gameOver || isPaused ? null : feedPet,
+                  child: const Text('Feed'),
+                ),
+                ElevatedButton(
+                  onPressed: hasWon || gameOver || isPaused
+                      ? null
+                      : playWithPet,
                   child: const Text('Play'),
                 ),
                 ElevatedButton(onPressed: resetPet, child: const Text('Reset')),
+
+                const SizedBox(height: 15),
+
+                ElevatedButton(
+                  onPressed: hasWon || gameOver
+                      ? null
+                      : isPaused
+                      ? resumeGame
+                      : pauseGame,
+                  child: Text(isPaused ? 'Resume' : 'Pause'),
+                ),
               ],
             ),
           ],
