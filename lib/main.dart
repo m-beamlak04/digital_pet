@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 
 void main() {
@@ -32,6 +33,12 @@ class _DigitalPetPageState extends State<DigitalPetPage> {
   bool hasWon = false;
   bool gameOver = false;
 
+  Timer? _hungerTimer;
+  Timer? _highMoodTimer;
+
+  final TextEditingController _nameController =
+  TextEditingController(text: 'Pip');
+
   String get mood {
     if (happiness > 70) {
       return 'Happy';
@@ -63,6 +70,8 @@ class _DigitalPetPageState extends State<DigitalPetPage> {
       } else {
         happiness = (happiness + 10).clamp(0, 100);
       }
+
+      _updateOutcome();
     });
   }
 
@@ -70,16 +79,98 @@ class _DigitalPetPageState extends State<DigitalPetPage> {
     setState(() {
       happiness = (happiness + 10).clamp(0, 100);
       hunger = (hunger + 5).clamp(0, 100);
+
+      _updateOutcome();
     });
   }
 
   void resetPet() {
+    _highMoodTimer?.cancel();
+    _highMoodTimer = null;
+
     setState(() {
       happiness = 50;
       hunger = 50;
       hasWon = false;
       gameOver = false;
     });
+
+    startHungerTimer();
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    startHungerTimer();
+  }
+
+  void startHungerTimer() {
+    _hungerTimer?.cancel();
+
+    _hungerTimer = Timer.periodic(
+      const Duration(seconds: 30),
+          (timer) {
+        setState(() {
+          if (hunger + 5 > 100) {
+            hunger = 100;
+            happiness = (happiness - 20).clamp(0, 100);
+          } else {
+            hunger += 5;
+          }
+
+          _updateOutcome();
+        });
+      },
+    );
+  }
+
+  @override
+  void dispose() {
+    _hungerTimer?.cancel();
+    _highMoodTimer?.cancel();
+    _nameController.dispose();
+    super.dispose();
+  }
+
+  void _updateOutcome() {
+    if (hunger == 100 && happiness <= 10) {
+      gameOver = true;
+      hasWon = false;
+
+      _highMoodTimer?.cancel();
+      _highMoodTimer = null;
+      _hungerTimer?.cancel();
+      return;
+    }
+
+    if (happiness > 80) {
+      if (_highMoodTimer == null) {
+        _highMoodTimer = Timer(
+          const Duration(minutes: 3),
+              () {
+            if (mounted && happiness > 80 && !gameOver) {
+              setState(() {
+                hasWon = true;
+                _hungerTimer?.cancel();
+              });
+            }
+
+            _highMoodTimer = null;
+          },
+        );
+      }
+    } else {
+      _highMoodTimer?.cancel();
+      _highMoodTimer = null;
+    }
+  }
+
+  void updatePetName() {
+    if (_nameController.text.trim().isNotEmpty) {
+      setState(() {
+        petName = _nameController.text.trim();
+      });
+    }
   }
 
   @override
@@ -98,6 +189,27 @@ class _DigitalPetPageState extends State<DigitalPetPage> {
 
             const SizedBox(height: 20),
 
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _nameController,
+                    decoration: const InputDecoration(
+                      labelText: 'Pet name',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                ElevatedButton(
+                  onPressed: updatePetName,
+                  child: const Text('Confirm'),
+                ),
+              ],
+            ),
+
+            const SizedBox(height: 20),
+
             ColorFiltered(
               colorFilter: ColorFilter.mode(moodColor, BlendMode.modulate),
               child: Image.asset('assets/pet.png', height: 200),
@@ -109,6 +221,26 @@ class _DigitalPetPageState extends State<DigitalPetPage> {
               'Mood: $mood',
               style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
             ),
+
+            if (hasWon)
+              const Text(
+                'YOU WIN!',
+                style: TextStyle(
+                  fontSize: 26,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.green,
+                ),
+              ),
+
+            if (gameOver)
+              const Text(
+                'GAME OVER',
+                style: TextStyle(
+                  fontSize: 26,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.red,
+                ),
+              ),
 
             const SizedBox(height: 30),
 
@@ -126,9 +258,9 @@ class _DigitalPetPageState extends State<DigitalPetPage> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: [
-                ElevatedButton(onPressed: feedPet, child: const Text('Feed')),
+                ElevatedButton(onPressed: hasWon || gameOver ? null : feedPet, child: const Text('Feed')),
                 ElevatedButton(
-                  onPressed: playWithPet,
+                  onPressed: hasWon || gameOver ? null : playWithPet,
                   child: const Text('Play'),
                 ),
                 ElevatedButton(onPressed: resetPet, child: const Text('Reset')),
